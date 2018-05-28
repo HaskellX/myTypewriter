@@ -4,11 +4,31 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using NAudio.Wave;
 using System.IO;
+using System.Drawing;
 
 namespace typewriterapp
 {
     static class Program
     {
+        private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern IntPtr GetModuleHandle(string lpModuleName);
+
+        //Для предотвращения утечки памяти
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        extern static bool DestroyIcon(IntPtr handle);
 
         private const int WH_KEYBOARD_LL = 13;
         private const int WM_KEYDOWN = 0x0100;
@@ -20,9 +40,48 @@ namespace typewriterapp
         {
             mainSound = File.ReadAllLines("settings.txt")[0];
             _hookID = SetHook(_proc);
-            Application.Run();
+            Application.Run(new MyCustomApplicationContext());
             UnhookWindowsHookEx(_hookID);
         }
+
+
+        public class MyCustomApplicationContext : ApplicationContext
+        {
+            private NotifyIcon trayIcon;
+
+            public MyCustomApplicationContext()
+            {
+                Bitmap myBitmap = Resources.AppIcon;
+                IntPtr Hicon = myBitmap.GetHicon();
+                Icon newIcon = Icon.FromHandle(Hicon);
+
+                trayIcon = new NotifyIcon()
+                {
+                    Icon = newIcon,
+                    ContextMenu = new ContextMenu(new MenuItem[] {
+                new MenuItem("Exit", Exit)
+            }),
+                    Visible = true
+                };
+
+                DestroyIcon(newIcon.Handle);
+            }
+
+            public new void Dispose()
+            {
+                UnhookWindowsHookEx(_hookID);
+            }
+
+            void Exit(object sender, EventArgs e)
+            {
+                trayIcon.Visible = false;
+                this.Dispose();
+                Application.Exit();
+            }
+        }
+
+
+
         private static IntPtr SetHook(LowLevelKeyboardProc proc)
         {
             using (Process curProcess = Process.GetCurrentProcess())
@@ -32,8 +91,6 @@ namespace typewriterapp
                     GetModuleHandle(curModule.ModuleName), 0);
             }
         }
-
-        private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 
         private static IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
         {
@@ -47,7 +104,6 @@ namespace typewriterapp
             if (nCode >= 0 && wParam == (IntPtr)WM_KEYDOWN)
             {
                 int vkCode = Marshal.ReadInt32(lParam);
-                Console.WriteLine(vkCode);
                 switch (vkCode)
                 {
                     //return
@@ -127,30 +183,5 @@ namespace typewriterapp
         {
             throw new NotImplementedException();
         }
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-
-        private static extern IntPtr SetWindowsHookEx(int idHook,
-
-            LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
-
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-
-        [return: MarshalAs(UnmanagedType.Bool)]
-
-        private static extern bool UnhookWindowsHookEx(IntPtr hhk);
-
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-
-        private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode,
-
-            IntPtr wParam, IntPtr lParam);
-
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-
-        private static extern IntPtr GetModuleHandle(string lpModuleName);
     }
 }
