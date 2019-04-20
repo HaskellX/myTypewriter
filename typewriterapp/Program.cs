@@ -35,15 +35,14 @@ namespace typewriterapp
         private static LowLevelKeyboardProc _proc = HookCallback;
         private static IntPtr _hookID = IntPtr.Zero;
         private static int counter;
-        private static string mainSound;
+        private static string mainSoundFileName;
         public static void Main()
         {
-            mainSound = File.ReadAllLines("settings.txt")[0];
+            mainSoundFileName = File.ReadAllLines("settings.txt")[0];
             _hookID = SetHook(_proc);
             Application.Run(new MyCustomApplicationContext());
             UnhookWindowsHookEx(_hookID);
         }
-
 
         public class MyCustomApplicationContext : ApplicationContext
         {
@@ -53,18 +52,15 @@ namespace typewriterapp
             {
                 Bitmap myBitmap = Resources.AppIcon;
                 IntPtr Hicon = myBitmap.GetHicon();
-                Icon newIcon = Icon.FromHandle(Hicon);
-
+                Icon icon = Icon.FromHandle(Hicon);
                 trayIcon = new NotifyIcon()
                 {
-                    Icon = newIcon,
-                    ContextMenu = new ContextMenu(new MenuItem[] {
-                new MenuItem("Exit", Exit)
-            }),
+                    Icon = icon,
+                    ContextMenu = new ContextMenu(new MenuItem[] {new MenuItem("Exit", Exit)}),
                     Visible = true
                 };
 
-                DestroyIcon(newIcon.Handle);
+                DestroyIcon(icon.Handle);
             }
 
             public new void Dispose()
@@ -80,15 +76,14 @@ namespace typewriterapp
             }
         }
 
-
-
         private static IntPtr SetHook(LowLevelKeyboardProc proc)
         {
             using (Process curProcess = Process.GetCurrentProcess())
-            using (ProcessModule curModule = curProcess.MainModule)
             {
-                return SetWindowsHookEx(WH_KEYBOARD_LL, proc,
-                    GetModuleHandle(curModule.ModuleName), 0);
+                using (ProcessModule curModule = curProcess.MainModule)
+                {
+                    return SetWindowsHookEx(idHook: WH_KEYBOARD_LL, proc, hMod: GetModuleHandle(curModule.ModuleName), dwThreadId: 0);
+                }
             }
         }
 
@@ -160,7 +155,7 @@ namespace typewriterapp
                     case 39:
                         break;
                     default:
-                        PlayWorker(mainSound);
+                        PlayWorker(mainSoundFileName);
                         break;
                 }
             }
@@ -172,11 +167,13 @@ namespace typewriterapp
         {
             WaveOut wavePlayer = new WaveOut();
             AudioFileReader audioFileReader = new AudioFileReader(filename);
-
             audioFileReader.Volume = 1.0f;
             wavePlayer.Init(audioFileReader);
             wavePlayer.Play();
-            wavePlayer.PlaybackStopped += new EventHandler<StoppedEventArgs>((_,__)=> { audioFileReader.Dispose(); wavePlayer.Dispose(); });
+            wavePlayer.PlaybackStopped += new EventHandler<StoppedEventArgs>((_,__) => {
+                audioFileReader.Dispose();
+                wavePlayer.Dispose();
+            });
         }
 
         private static void WavePlayer_PlaybackStopped(object sender, StoppedEventArgs e)
