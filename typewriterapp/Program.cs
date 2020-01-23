@@ -41,6 +41,8 @@ namespace typewriterapp
             if (counter == 200)
             {
                 GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
                 counter = 0;
             }
 
